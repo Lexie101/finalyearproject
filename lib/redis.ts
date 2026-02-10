@@ -1,11 +1,15 @@
 import Redis from "ioredis";
 
-const redisUrl = process.env.REDIS_URL || process.env.REDIS_URL;
+const redisUrl = process.env.REDIS_URL;
 
-if (!redisUrl) {
-  console.warn("REDIS_URL is not set. Redis features will be disabled.");
+let redis: Redis | null = null;
+
+if (redisUrl) {
+  redis = new Redis(redisUrl);
+} else {
+  console.warn("REDIS_URL is not set. Rate limiting and caching will be disabled.");
 }
 
-export const redis = new Redis(redisUrl);
+export { redis };
 
 export default redis;
