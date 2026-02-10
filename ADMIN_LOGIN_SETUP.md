@@ -1,11 +1,4 @@
-# Admin Login Setup Guide
 
-## Overview
-The admin and driver login system uses email/password authentication instead of OTP (unlike students).
-
-Uses actual Cavendish University email format: `firstname.lastname@cavendish.co.zm`
-
-## Setup Steps
 
 ### 1. Create the Admins Table in Supabase
 
