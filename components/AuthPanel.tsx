@@ -2,14 +2,14 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Car, ShieldCheck, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { GraduationCap, Car, ShieldCheck, Mail, Lock, ArrowRight, Loader2, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
-type Role = 'student' | 'driver' | 'admin';
+type Role = 'student' | 'driver' | 'admin' | 'super_admin';
 
 interface AuthPanelProps {
-  onLogin: (role: Role, email: string) => void;
+  onLogin: (role: Exclude<Role, 'student'> | 'student', email: string) => void;
 }
 
 export const AuthPanel: React.FC<AuthPanelProps> = ({ onLogin }) => {
@@ -52,66 +52,84 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({ onLogin }) => {
         onLogin(role, email);
         toast.success('Successfully logged in');
       } else {
-        // For admin/driver, we'd normally check credentials against a real auth route
-        // For now we'll keep the simplified logic but ready for production
-        setTimeout(() => {
-          onLogin(role, email);
-          toast.success(`Logged in as ${role}`);
-        }, 1000);
+        // Admin/Driver/Super Admin login with email and password
+        const response = await api.adminLogin(email, password, role);
+        // Use the actual role from the database, not the selected role
+        const actualRole = response.user.role as Exclude<Role, 'student'>;
+        onLogin(actualRole, email);
+        toast.success(`Logged in as ${actualRole}`);
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      toast.error(error.message || 'Invalid OTP');
+      toast.error(error.message || 'Invalid credentials');
     } finally {
-      if (role === 'student') setLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 p-4">
-      {/* Role Selection Panels */}
-      {(['student', 'driver', 'admin'] as Role[]).map((r) => (
-        <motion.button
-          key={r}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            setRole(r);
-            setShowOtp(false);
-            setEmail('');
-            setPassword('');
-          }}
-          className={`relative overflow-hidden rounded-2xl p-6 h-48 flex flex-col items-center justify-center gap-4 transition-all duration-300 border ${
-            role === r 
-              ? 'bg-purple-600/30 border-purple-400 shadow-[0_0_30px_-5px_rgba(168,85,247,0.4)]' 
-              : 'bg-white/5 border-white/10 hover:bg-white/10'
-          } backdrop-blur-xl group`}
-        >
-          <div className={`p-4 rounded-full ${role === r ? 'bg-purple-500 text-white' : 'bg-white/10 text-white/60'} transition-colors`}>
-            {r === 'student' && <GraduationCap size={32} />}
-            {r === 'driver' && <Car size={32} />}
-            {r === 'admin' && <ShieldCheck size={32} />}
-          </div>
-          <span className="text-xl font-semibold capitalize text-white">{r}</span>
-          {role === r && (
-            <motion.div 
-              layoutId="active-indicator"
-              className="absolute bottom-0 left-0 w-full h-1 bg-purple-400"
-            />
-          )}
-        </motion.button>
-      ))}
+    <div className="flex flex-col gap-8 w-full">
+      {/* Role Selection Title */}
+      <div className="text-center">
+        <p className="text-white/60 text-sm uppercase tracking-widest font-semibold mb-4">Select Your Role</p>
+      </div>
+
+      {/* Role Selection Panels - Grid */}
+      <div className="w-full max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 px-4">
+        {(['student', 'driver', 'admin', 'super_admin'] as Role[]).map((r) => (
+          <motion.button
+            key={r}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              setRole(r);
+              setShowOtp(false);
+              setEmail('');
+              setPassword('');
+            }}
+            className={`relative overflow-hidden rounded-xl p-4 h-32 flex flex-col items-center justify-center gap-2.5 transition-all duration-300 border ${
+              role === r 
+                ? 'bg-gradient-to-br from-purple-600/50 to-purple-700/30 border-purple-400 shadow-[0_0_20px_-5px_rgba(168,85,247,0.6)] scale-105' 
+                : 'bg-white/8 border-white/20 hover:bg-white/15 hover:border-white/40'
+            } backdrop-blur-sm group cursor-pointer`}
+          >
+            {/* Background glow effect */}
+            {role === r && (
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-50" />
+            )}
+            
+            <div className={`p-3 rounded-lg transition-all duration-300 ${role === r ? 'bg-purple-500/40 text-purple-200 shadow-lg shadow-purple-500/50' : 'bg-white/10 text-white/50 group-hover:bg-white/20 group-hover:text-white/70'}`}>
+              {r === 'student' && <GraduationCap size={24} />}
+              {r === 'driver' && <Car size={24} />}
+              {r === 'admin' && <ShieldCheck size={24} />}
+              {r === 'super_admin' && <Crown size={24} />}
+            </div>
+            
+            <span className="text-xs font-bold capitalize text-white text-center leading-tight relative z-10">
+              {r === 'super_admin' ? 'Super Admin' : r}
+            </span>
+            
+            {/* Active indicator bar */}
+            {role === r && (
+              <motion.div 
+                layoutId="active-indicator"
+                className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600 rounded-t-lg"
+              />
+            )}
+          </motion.button>
+        ))}
+      </div>
 
       {/* Auth Form Panel */}
       <motion.div 
         layout
-        className="md:col-span-3 mt-8 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl"
+        className="w-full max-w-md mx-auto bg-white/5 backdrop-blur-2xl border border-white/15 rounded-2xl p-8 shadow-2xl"
       >
-        <div className="max-w-md mx-auto">
-          <h2 className="text-3xl font-bold text-white mb-2 text-center">
-            {role.charAt(0).toUpperCase() + role.slice(1)} Login
+        <div>
+          <h2 className="text-2xl font-bold text-white mb-1.5 text-center capitalize">
+            {role === 'super_admin' ? 'Super Admin' : role} Login
           </h2>
-          <p className="text-white/60 text-center mb-8">
+          <p className="text-white/50 text-center text-sm mb-6">
             Access the Cavendish Bus Tracking System
           </p>
 
@@ -124,10 +142,13 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({ onLogin }) => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={role === 'student' ? 'ab123456@students.cavendish.co.zm' : 'email@cavendish.co.zm'}
+                placeholder={role === 'student' ? 'ab123456@students.cavendish.co.zm' : 'firstname.lastname@cavendish.co.zm'}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                 required
               />
+              {role !== 'student' && (
+                <p className="text-xs text-white/40 mt-1">Example: john.phiri@cavendish.co.zm</p>
+              )}
             </div>
 
             {role !== 'student' && (

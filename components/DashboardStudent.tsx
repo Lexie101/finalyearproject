@@ -1,9 +1,17 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
 import { MapComponent } from './MapComponent';
 import { Bus, MapPin, Clock, Search, Bell, LogOut, Navigation } from 'lucide-react';
 import { api } from '@/lib/api';
+
+interface BusLocation {
+  id: string;
+  lat: number;
+  lng: number;
+  busNumber: string;
+  driverName: string;
+  lastUpdate: string;
+  speed: number;
+}
 
 interface DashboardStudentProps {
   user: { email: string };
@@ -11,33 +19,30 @@ interface DashboardStudentProps {
 }
 
 export default function DashboardStudent({ user, onLogout }: DashboardStudentProps) {
-  const [buses, setBuses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchLocations = async () => {
-    try {
-      const data = await api.getLocations();
-      
-      if (Array.isArray(data)) {
-        const formattedBuses = data.map((loc: any) => ({
-          id: loc.bus_id,
-          lat: loc.latitude,
-          lng: loc.longitude,
-          busNumber: loc.bus_id.replace('bus-', '').toUpperCase(),
-          driverName: 'Live Driver', // In a real app, fetch this from profile
-          lastUpdate: loc.updated_at,
-          speed: loc.speed
-        }));
-        setBuses(formattedBuses);
-      }
-    } catch (err) {
-      console.error('Failed to fetch locations:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [buses, setBuses] = useState<BusLocation[]>([]);
 
   useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const data = await api.getLocations();
+        
+        if (Array.isArray(data)) {
+          const formattedBuses = data.map((loc: Record<string, unknown>) => ({
+            id: String(loc.bus_id),
+            lat: Number(loc.lat || loc.latitude),
+            lng: Number(loc.lng || loc.longitude),
+            busNumber: String(loc.bus_id).replace('bus-', '').toUpperCase(),
+            driverName: 'Live Driver',
+            lastUpdate: String(loc.created_at || loc.updated_at),
+            speed: Number(loc.speed) || 0
+          }));
+          setBuses(formattedBuses);
+        }
+      } catch (err) {
+        console.error('Failed to fetch locations:', err);
+      }
+    };
+
     fetchLocations();
     const interval = setInterval(fetchLocations, 5000);
     return () => clearInterval(interval);
@@ -48,11 +53,9 @@ export default function DashboardStudent({ user, onLogout }: DashboardStudentPro
       {/* Header */}
       <header className="h-16 border-b border-white/10 bg-white/5 backdrop-blur-md flex items-center justify-between px-6 z-10">
         <div className="flex items-center gap-3">
-          <div className="bg-purple-600 p-2 rounded-lg">
-            <Bus className="text-white" size={24} />
-          </div>
+          <img src="/logo%20(1).png" alt="Cavendish Logo" className="w-10 h-10 object-cover rounded-lg" />
           <div>
-            <h1 className="text-white font-bold leading-none">CU Bus Tracker</h1>
+            <h1 className="text-white font-bold leading-none">CUZ Bus Tracking System</h1>
             <p className="text-white/40 text-xs">{user.email}</p>
           </div>
         </div>

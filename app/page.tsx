@@ -5,12 +5,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AuthPanel } from "@/components/AuthPanel";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
 
-type Role = "student" | "driver" | "admin" | null;
-
 function LoginInner() {
   const { login, initializing } = useAuth();
 
-  const handleLogin = (role: Exclude<Role, null>, email: string) => {
+  const handleLogin = (role: "student" | "driver" | "admin" | "super_admin", email: string) => {
+    if (role === null) return;
     login(role, email);
   };
 
@@ -40,7 +39,7 @@ function LoginInner() {
           <div className="mb-12 text-center relative z-10">
             <img src="/logo%20(1).png" alt="Cavendish Logo" className="w-28 h-28 mx-auto mb-6 object-cover rounded-3xl shadow-2xl border border-white/10 bg-white/5 p-1" />
             <h1 className="text-5xl font-black text-white mb-2 tracking-tight">CAVENDISH</h1>
-            <p className="text-purple-400 font-bold tracking-[0.3em] uppercase text-sm">Bus Tracking System</p>
+            <p className="text-white font-bold tracking-[0.3em] uppercase text-sm">Bus Tracking System</p>
           </div>
 
           <AuthPanel onLogin={handleLogin} />

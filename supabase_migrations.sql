@@ -36,6 +36,23 @@ create table if not exists public.locations (
 create index if not exists idx_locations_bus_created on public.locations (bus_id, created_at desc);
 create index if not exists idx_locations_user_created on public.locations (user_id, created_at desc);
 
+-- 4) emergency_alerts table
+create table if not exists public.emergency_alerts (
+  id uuid default gen_random_uuid() primary key,
+  driver_id uuid not null,
+  driver_email text not null,
+  driver_name text,
+  bus_id text not null,
+  latitude double precision not null,
+  longitude double precision not null,
+  status text default 'active',
+  timestamp timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_emergency_driver_created on public.emergency_alerts (driver_id, created_at desc);
+create index if not exists idx_emergency_status_created on public.emergency_alerts (status, created_at desc);
+
 -- OPTIONAL: enable Row Level Security and example policy for users table
 -- alter table public.users enable row level security;
 -- create policy "Allow select for authenticated" on public.users

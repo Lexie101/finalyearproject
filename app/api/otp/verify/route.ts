@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     await supabase.from("otps").update({ used: true }).eq("id", data.id);
 
     // Optionally upsert user record
-    const upsertUser = await supabase.from("users").upsert({ email }, { onConflict: ["email"] });
+    const upsertUser = await supabase.from("users").upsert({ email }, { onConflict: "email" });
     if (upsertUser.error) console.warn("User upsert warning:", upsertUser.error);
 
     return NextResponse.json({ message: "OTP verified successfully", verified: true });

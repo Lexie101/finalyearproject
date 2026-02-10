@@ -6,14 +6,14 @@ declare module "next-auth" {
     user: {
       id: string;
       email: string;
-      role: "student" | "driver" | "admin";
+      role: "student" | "driver" | "admin" | "super_admin";
     };
   }
 
   interface JWT {
     id: string;
     email: string;
-    role: "student" | "driver" | "admin";
+    role: "student" | "driver" | "admin" | "super_admin";
   }
 }
 

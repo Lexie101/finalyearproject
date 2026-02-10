@@ -34,6 +34,31 @@ export const api = {
       body: JSON.stringify({ email, otp }),
     }),
 
+  adminLogin: (email: string, password: string, role: "admin" | "driver" | "super_admin") =>
+    apiRequest("/auth/admin-login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, role }),
+    }),
+
+  // Super admin management functions
+  createAdmin: (email: string, password: string, role: "admin" | "driver", name: string, phone?: string) =>
+    apiRequest("/admin/manage", {
+      method: "POST",
+      body: JSON.stringify({ action: "create", email, password, role, name, phone }),
+    }),
+
+  listAdmins: () =>
+    apiRequest("/admin/manage", {
+      method: "POST",
+      body: JSON.stringify({ action: "list" }),
+    }),
+
+  deleteAdmin: (email: string) =>
+    apiRequest("/admin/manage", {
+      method: "POST",
+      body: JSON.stringify({ action: "delete", email }),
+    }),
+
   updateLocation: (data: {
     bus_id?: string;
     latitude: number;

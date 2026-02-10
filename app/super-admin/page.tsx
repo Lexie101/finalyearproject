@@ -3,25 +3,21 @@
 import React, { useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
-import DashboardAdmin from "@/components/DashboardAdmin";
+import DashboardSuperAdmin from "@/components/DashboardSuperAdmin";
 
-export default function AdminPage() {
+export default function SuperAdminPage() {
   const { user, initializing, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!initializing) {
-      // Only redirect if on wrong page (not if no user - let loading state handle that)
-      if (user?.role === "super_admin") {
-        router.replace("/super-admin");
-      } else if (user?.role !== "admin") {
-        // Redirect if logged in but not admin/super_admin
+    if (!initializing && user) {
+      // Only redirect if on wrong page
+      if (user.role !== "super_admin" && user.role !== "admin") {
         router.replace("/");
       }
     }
-  }, [user?.role, initializing, router]);
+  }, [user, initializing, router]);
 
-  // Show loading spinner if initializing or no user/wrong role
   if (initializing) {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
@@ -30,7 +26,6 @@ export default function AdminPage() {
     );
   }
 
-  // Redirect to login if not authenticated
   if (!user) {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
@@ -42,16 +37,16 @@ export default function AdminPage() {
     );
   }
 
-  // Show error if wrong role
-  if (user.role !== "admin" && user.role !== "super_admin") {
+  if (user.role !== "super_admin" && user.role !== "admin") {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
         <div className="text-center text-red-400">
-          <p>Access Denied: Admin role required</p>
+          <p>Access Denied: Super Admin role required</p>
         </div>
       </div>
     );
   }
 
-  return <DashboardAdmin user={user} onLogout={logout} />;
+  return <DashboardSuperAdmin user={user} onLogout={logout} />;
 }
+

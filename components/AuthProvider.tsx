@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Role = "student" | "driver" | "admin" | null;
+type Role = "student" | "driver" | "admin" | "super_admin" | null;
 
 export interface User {
   role: Role;
@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    // Load session from localStorage on mount
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -37,7 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         } else {
           setUser(parsed);
-          if (parsed.role) router.replace(`/${parsed.role}`);
+          // Don't auto-redirect on mount to prevent conflicts with page-level auth checks
+          // Let individual pages handle their own redirects based on the loaded user
         }
       }
     } catch (e) {
@@ -45,7 +47,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(STORAGE_KEY);
       setUser(null);
     } finally {
-      setInitializing(false);
+      // Delay setting initializing=false to ensure state is stable
+      setTimeout(() => setInitializing(false), 100);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
