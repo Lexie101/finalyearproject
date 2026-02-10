@@ -1,65 +1,63 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AuthPanel } from "@/components/AuthPanel";
+import { AuthProvider, useAuth } from "@/components/AuthProvider";
+
+type Role = "student" | "driver" | "admin" | null;
+
+function LoginInner() {
+  const { login, initializing } = useAuth();
+
+  const handleLogin = (role: Exclude<Role, null>, email: string) => {
+    login(role, email);
+  };
+
+  if (initializing) {
+    return (
+      <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="min-h-screen bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('/main%20bg.png')" }}>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key="login"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, y: 20 }}
+          className="relative min-h-screen flex flex-col items-center justify-center p-6"
+        >
+          <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full"></div>
+          </div>
+
+          <div className="mb-12 text-center relative z-10">
+            <img src="/logo%20(1).png" alt="Cavendish Logo" className="w-28 h-28 mx-auto mb-6 object-cover rounded-3xl shadow-2xl border border-white/10 bg-white/5 p-1" />
+            <h1 className="text-5xl font-black text-white mb-2 tracking-tight">CAVENDISH</h1>
+            <p className="text-purple-400 font-bold tracking-[0.3em] uppercase text-sm">Bus Tracking System</p>
+          </div>
+
+          <AuthPanel onLogin={handleLogin} />
+
+          <footer className="mt-12 text-white/30 text-sm">
+            &copy; 2026 Cavendish University Zambia. All rights reserved.
+          </footer>
+        </motion.div>
+      </AnimatePresence>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <AuthProvider>
+      <LoginInner />
+    </AuthProvider>
   );
 }
