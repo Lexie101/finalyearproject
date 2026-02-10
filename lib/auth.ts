@@ -1,19 +1,28 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { JWT as NextAuthJWT } from "next-auth/jwt";
+
+type UserRole = "student" | "driver" | "admin" | "super_admin";
 
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
       email: string;
-      role: "student" | "driver" | "admin" | "super_admin";
+      role: UserRole;
     };
   }
 
   interface JWT {
     id: string;
     email: string;
-    role: "student" | "driver" | "admin" | "super_admin";
+    role: UserRole;
+  }
+
+  interface User {
+    id: string;
+    email: string;
+    role: UserRole;
   }
 }
 
@@ -31,7 +40,8 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Missing credentials");
         }
 
-        // Verify OTP (in production, check against stored OTP)
+        // TODO: Verify OTP against database in production
+        // For development, use NEXT_PUBLIC_TEST_OTP environment variable
         const storedOtp = process.env.NEXT_PUBLIC_TEST_OTP || "123456";
         if (credentials.otp !== storedOtp) {
           throw new Error("Invalid OTP");
@@ -49,7 +59,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: credentials.email,
           email: credentials.email,
-          role: credentials.role as "student" | "driver" | "admin",
+          role: credentials.role as UserRole,
         };
       },
     }),
@@ -59,24 +69,18 @@ export const authOptions: NextAuthOptions = {
     error: "/",
   },
   callbacks: {
-    // @ts-expect-error - NextAuth JWT callback type mismatch
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: NextAuthJWT; user?: any }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
-        // @ts-expect-error - role property not in default User type
         token.role = user.role;
       }
       return token;
     },
-    // @ts-expect-error - NextAuth session callback type mismatch
-    async session({ session, token }) {
+    async session({ session, token }: { session: any; token: NextAuthJWT }) {
       if (session.user) {
-        // @ts-expect-error - adding custom fields to session.user
         session.user.id = token.id;
-        // @ts-expect-error - adding custom fields to session.user
         session.user.email = token.email;
-        // @ts-expect-error - adding custom fields to session.user
         session.user.role = token.role;
       }
       return session;
