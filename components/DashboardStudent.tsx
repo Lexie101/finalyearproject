@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { MapComponent } from './MapComponent';
+import dynamic from 'next/dynamic';
 import { Bus, MapPin, Clock, Search, Bell, LogOut, Navigation } from 'lucide-react';
 import { api } from '@/lib/api';
+
+// Dynamically import MapComponent to avoid SSR issues
+const MapComponent = dynamic(() => import('./MapComponent').then(mod => ({ default: mod.MapComponent })), {
+  ssr: false,
+  loading: () => <div className="w-full h-full bg-gray-800 flex items-center justify-center">Loading map...</div>
+});
 
 interface BusLocation {
   id: string;

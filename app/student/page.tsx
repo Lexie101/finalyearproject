@@ -5,6 +5,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import DashboardStudent from "@/components/DashboardStudent";
 
+export const dynamic = 'force-dynamic';
+
 export default function StudentPage() {
   const { user, initializing, logout } = useAuth();
   const router = useRouter();

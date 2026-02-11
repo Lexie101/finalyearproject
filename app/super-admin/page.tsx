@@ -5,6 +5,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import DashboardSuperAdmin from "@/components/DashboardSuperAdmin";
 
+export const dynamic = 'force-dynamic';
+
 export default function SuperAdminPage() {
   const { user, initializing, logout } = useAuth();
   const router = useRouter();

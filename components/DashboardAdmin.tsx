@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import {
   Users,
   Bus,
@@ -16,11 +17,16 @@ import {
   Trash2,
   Lock,
 } from "lucide-react";
-import { MapComponent } from "./MapComponent";
 import { User } from "./AuthProvider";
 import { createClient } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+
+// Dynamically import MapComponent to avoid SSR issues
+const MapComponent = dynamic(() => import("./MapComponent").then(mod => ({ default: mod.MapComponent })), {
+  ssr: false,
+  loading: () => <div className="w-full h-full bg-gray-800 flex items-center justify-center">Loading map...</div>
+});
 
 interface BusData {
   id: string;

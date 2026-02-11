@@ -5,6 +5,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import DashboardDriver from "@/components/DashboardDriver";
 
+export const dynamic = 'force-dynamic';
+
 export default function DriverPage() {
   const { user, initializing, logout } = useAuth();
   const router = useRouter();
