@@ -8,75 +8,77 @@ type Role = "student" | "driver" | "admin" | "super_admin" | null;
 export interface User {
   role: Role;
   email: string;
-  expiresAt?: number;
+  name?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (role: Exclude<Role, null>, email: string, expiresInMs?: number) => void;
+  login: (role: Exclude<Role, null>, email: string, name?: string) => void;
   logout: () => void;
-  initializing: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = "cavendish_session";
-
+/**
+ * Auth Provider - Session Management
+ * Handles user authentication state and session restoration
+ */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [initializing, setInitializing] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  // Restore session on mount
   useEffect(() => {
-    // Load session from localStorage on mount
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed: User = JSON.parse(saved);
-        if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
-          localStorage.removeItem(STORAGE_KEY);
-          setUser(null);
-        } else {
-          setUser(parsed);
-          // Don't auto-redirect on mount to prevent conflicts with page-level auth checks
-          // Let individual pages handle their own redirects based on the loaded user
+    const restoreSession = async () => {
+      try {
+        const response = await fetch("/api/auth/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.authenticated && data.user) {
+            setUser(data.user);
+          }
         }
+      } catch (error) {
+        console.warn("Failed to restore session", error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (e) {
-      console.error("Failed to restore session", e);
-      localStorage.removeItem(STORAGE_KEY);
-      setUser(null);
-    } finally {
-      // Delay setting initializing=false to ensure state is stable
-      setTimeout(() => setInitializing(false), 100);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    };
+
+    restoreSession();
   }, []);
 
-  const login = (role: Exclude<Role, null>, email: string, expiresInMs?: number) => {
-    const next: User = { role, email };
-    if (expiresInMs) next.expiresAt = Date.now() + expiresInMs;
-    setUser(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch (e) {
-      console.error("Failed to save session", e);
-    }
-    router.replace(`/${role}`);
+  const login = (role: Exclude<Role, null>, email: string, name?: string) => {
+    setUser({ role, email, name });
+    // Navigate to role-specific dashboard
+    // Route admin and super_admin roles both to /super-admin dashboard
+    const path = (role === 'super_admin' || role === 'admin') ? '/super-admin' : `/${role}` as string;
+    router.replace(path);
   };
 
-  const logout = () => {
-    setUser(null);
+  const logout = async () => {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {
-      console.error("Failed to clear session", e);
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.warn("Logout error", error);
+    } finally {
+      setUser(null);
+      router.replace("/login");
     }
-    router.replace("/");
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, initializing }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -86,4 +88,10 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
+}
+
+export function useUser() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useUser must be used within AuthProvider');
+  return ctx.user;
 }

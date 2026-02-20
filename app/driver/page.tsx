@@ -1,49 +1,18 @@
-"use client";
+'use client';
 
-import React, { useEffect } from "react";
-import { useAuth } from "@/components/AuthProvider";
-import { useRouter } from "next/navigation";
-import DashboardDriver from "@/components/DashboardDriver";
-
-export const dynamic = 'force-dynamic';
+import { useAuth } from '@/components/AuthProvider';
+import DashboardDriver from '@/components/DashboardDriver';
 
 export default function DriverPage() {
-  const { user, initializing, logout } = useAuth();
-  const router = useRouter();
+  const { user, logout } = useAuth();
 
-  useEffect(() => {
-    if (!initializing && user) {
-      // Only redirect if on wrong page
-      if (user.role !== "driver") {
-        router.replace("/");
-      }
-    }
-  }, [user?.role, initializing, router]);
-
-  if (initializing) {
+  // Show loading/redirecting state while checking auth
+  if (!user || user.role !== 'driver') {
     return (
-      <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
-        <div className="text-center text-white">
-          <p className="mb-4">Redirecting to login...</p>
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (user.role !== "driver") {
-    return (
-      <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
-        <div className="text-center text-red-400">
-          <p>Access Denied: Driver role required</p>
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-white mb-4">Loading Driver Dashboard...</h1>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
         </div>
       </div>
     );

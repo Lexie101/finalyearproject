@@ -1,14 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer } from "@/lib/supabase-server";
+import { comparePassword, hashPassword } from "@/lib/password";
+import { verifySession } from "@/lib/auth";
 
+export const runtime = "nodejs";
+
+/**
+ * Change Password Endpoint
+ * Allows super admins and drivers to change their password
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, oldPassword, newPassword } = body;
+    const { oldPassword, newPassword } = body;
 
-    if (!email || !oldPassword || !newPassword) {
+    // Verify session
+    const cookieValue = req.cookies.get("cavendish_session")?.value;
+    const session = await verifySession(cookieValue);
+
+    if (!session) {
       return NextResponse.json(
-        { error: "Email, old password, and new password are required" },
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    if (!oldPassword || !newPassword) {
+      return NextResponse.json(
+        { error: "Old password and new password are required" },
         { status: 400 }
       );
     }
@@ -20,47 +39,107 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify old password first
-    const { data: admin, error: selectError } = await supabase
-      .from("admins")
-      .select("password")
-      .eq("email", email)
-      .single();
+    // Allow only admin, super_admin and driver roles to change password
+    const normalizedRole = session.role?.toLowerCase().replace("-", "_");
+    if (!["admin", "super_admin", "driver"].includes(normalizedRole)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 403 }
+      );
+    }
 
-    if (selectError || !admin) {
+    let user;
+    let selectError;
+
+    if (normalizedRole === "driver") {
+      const { data, error } = await supabaseServer
+        .from("admins")
+        .select("password_hash")
+        .eq("email", session.email)
+        .eq("role", "driver")
+        .maybeSingle();
+      user = data;
+      selectError = error;
+    } else if (normalizedRole === "admin" || normalizedRole === "super_admin") {
+      const { data, error } = await supabaseServer
+        .from("profiles")
+        .select("password_hash")
+        .eq("email", session.email)
+        .in("role", ["admin", "super_admin"])
+        .maybeSingle();
+      user = data;
+      selectError = error;
+    } else {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 403 }
+      );
+    }
+
+    if (selectError && selectError.code !== "PGRST116") {
+      console.error("[Change Password] Query error:", selectError);
+      return NextResponse.json(
+        { error: "Failed to verify identity" },
+        { status: 401 }
+      );
+    }
+
+    if (!user) {
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }
       );
     }
 
-    // Check if old password matches (plain text comparison - should use bcrypt in production)
-    if (admin.password !== oldPassword) {
+    const passwordMatch = await comparePassword(oldPassword, user.password_hash || "");
+    if (!passwordMatch) {
       return NextResponse.json(
         { error: "Current password is incorrect" },
         { status: 401 }
       );
     }
 
-    // Update password
-    const { error: updateError } = await supabase
-      .from("admins")
-      .update({ password: newPassword })
-      .eq("email", email);
+    // Hash and update new password
+    const newHash = await hashPassword(newPassword);
+    let updateError;
+
+    if (normalizedRole === "driver") {
+      const { error } = await supabaseServer
+        .from("admins")
+        .update({ password_hash: newHash })
+        .eq("email", session.email)
+        .eq("role", "driver");
+      updateError = error;
+    } else if (normalizedRole === "admin" || normalizedRole === "super_admin") {
+      const { error } = await supabaseServer
+        .from("profiles")
+        .update({ password_hash: newHash })
+        .eq("email", session.email)
+        .in("role", ["admin", "super_admin"]);
+      updateError = error;
+    } else {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 403 }
+      );
+    }
 
     if (updateError) {
-      console.error("Password update error:", updateError);
+      console.error("[Change Password] Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to update password" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ message: "Password changed successfully" });
-  } catch (error) {
-    console.error("Change password error:", error);
     return NextResponse.json(
-      { error: "Password change failed" },
+      { success: true, message: "Password updated successfully" },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("[Change Password] Unexpected error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

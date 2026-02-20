@@ -6,10 +6,10 @@ import { signSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-  /**
-   * Admin/Super Admin Login Endpoint
-   * Email + Password authentication for admin and super_admin roles
-   */
+/**
+ * Driver Login Endpoint
+ * Email + Password authentication for drivers
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -42,24 +42,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Query admin or super_admin user from profiles table
-    const { data: adminProfile, error: queryError } = await supabaseServer
-      .from("profiles")
-      .select("id, email, full_name, password_hash, role")
+    // Query driver user from admins table
+    const { data: driverProfile, error: queryError } = await supabaseServer
+      .from("admins")
+      .select("id, email, name, password_hash, role")
       .ilike("email", normalizedEmail)
-      .in("role", ["admin", "super_admin"])
+      .eq("role", "driver")
       .maybeSingle();
 
     if (queryError && queryError.code !== "PGRST116") {
-      console.error("[Admin Login] Query error:", queryError);
+      console.error("[Driver Login] Query error:", queryError);
       return NextResponse.json(
         { error: "Login failed" },
         { status: 401 }
       );
     }
 
-    if (!adminProfile) {
-      console.warn(`[Admin Login] User not found: ${normalizedEmail}`);
+    if (!driverProfile) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -70,11 +69,11 @@ export async function POST(req: NextRequest) {
     let passwordMatches = false;
 
     // Try bcrypt hash first (preferred)
-    if (adminProfile.password_hash && adminProfile.password_hash.startsWith("$2")) {
+    if (driverProfile.password_hash && driverProfile.password_hash.startsWith("$2")) {
       try {
-        passwordMatches = await comparePassword(password, adminProfile.password_hash);
+        passwordMatches = await comparePassword(password, driverProfile.password_hash);
       } catch (err) {
-        console.error("[Admin Login] Password comparison error:", err);
+        console.error("[Driver Login] Password comparison error:", err);
         return NextResponse.json(
           { error: "Login failed" },
           { status: 401 }
@@ -83,24 +82,24 @@ export async function POST(req: NextRequest) {
     }
 
     // Fallback to legacy plaintext password (DEPRECATED - for migration only)
-    if (!passwordMatches && !adminProfile.password_hash?.startsWith("$2")) {
-      if (adminProfile.password_hash === password) {
+    if (!passwordMatches && !driverProfile.password_hash?.startsWith("$2")) {
+      if (driverProfile.password_hash === password) {
         passwordMatches = true;
 
         // Auto-migrate legacy plaintext password to bcrypt
         try {
           const newHash = await hashPassword(password);
           await supabaseServer
-            .from("profiles")
+            .from("admins")
             .update({ password_hash: newHash })
-            .eq("id", adminProfile.id);
+            .eq("id", driverProfile.id);
 
           console.info(
-            `[Admin Login] Auto-migrated password to bcrypt for user ${adminProfile.id}`
+            `[Driver Login] Auto-migrated password to bcrypt for user ${driverProfile.id}`
           );
         } catch (err) {
           console.warn(
-            `[Admin Login] Failed to auto-migrate password for user ${adminProfile.id}:`,
+            `[Driver Login] Failed to auto-migrate password for user ${driverProfile.id}:`,
             err
           );
           // Continue with login even if migration fails
@@ -109,7 +108,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!passwordMatches) {
-      console.warn(`[Admin Login] Invalid password for ${normalizedEmail}`);
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -119,22 +117,21 @@ export async function POST(req: NextRequest) {
     // Reset rate limit on successful login
     resetRateLimit(normalizedEmail);
 
-    // Create session using the actual role from profile
+    // Create session token
     const sessionToken = await signSession({
       email: normalizedEmail,
-      role: (adminProfile.role === "super-admin" ? "super_admin" : adminProfile.role) || "admin",
-      userId: adminProfile.id,
+      role: "driver",
+      userId: driverProfile.id,
     });
 
-    // Create response
     const res = NextResponse.json(
       {
         success: true,
-        message: "Login successful",
         user: {
-          email: adminProfile.email,
-          role: (adminProfile.role === "super-admin" ? "super_admin" : adminProfile.role) || "admin",
-          name: adminProfile.full_name || "",
+          id: driverProfile.id,
+          email: normalizedEmail,
+          role: "driver",
+          name: driverProfile.name,
         },
       },
       { status: 200 }
@@ -149,11 +146,11 @@ export async function POST(req: NextRequest) {
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
-    console.info(`[Admin Login] Successful login for ${normalizedEmail}`);
+    console.info(`[Driver Login] Successful login for ${normalizedEmail}`);
     return res;
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    console.error("[Admin Login] Error:", err);
+    console.error("[Driver Login] Error:", err);
     return NextResponse.json(
       { error: err.message || "Login failed" },
       { status: 500 }

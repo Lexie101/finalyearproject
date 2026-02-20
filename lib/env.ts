@@ -15,7 +15,6 @@ const requiredEnvVars = [
 
 // Optional but recommend for production
 const productionEnvVars = [
-  "REDIS_URL",
   "SMTP_HOST",
   "SMTP_PORT",
   "SMTP_USER",
@@ -56,11 +55,6 @@ export function getEnv(key: string, defaultValue?: string): string {
     throw new Error(`Environment variable ${key} is not set`);
   }
   return value || defaultValue || "";
-}
-
-// Check if Redis is configured
-export function isRedisConfigured(): boolean {
-  return !!process.env.REDIS_URL;
 }
 
 // Check if in development

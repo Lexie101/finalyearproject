@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { verifySession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    // [Location Update] Verify signed session cookie
+    const cookie = req.cookies.get("cavendish_session")?.value;
+    const session = await verifySession(cookie);
 
-    if (!session?.user) {
+    if (!session?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -21,21 +24,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userId = session.user.id || session.user.email;
+    const userId = session.email;
 
-    // Server-side rate limiting for location updates (per user)
+    // Rate limiting for location updates (lenient - allow up to 5 per 10 minutes)
     try {
-      const rlKey = `loc:${userId}`;
-      const { checkRateLimit } = await import("@/lib/rateLimiter");
-      const rl = await checkRateLimit(rlKey, 60 * 1000, 120); // 120 updates per minute
-      if (!rl.allowed) {
-        return NextResponse.json({ error: "Too many location updates. Slow down." }, { status: 429 });
+      const { checkRateLimit } = await import("@/lib/rate-limit");
+      const status = checkRateLimit(userId);
+      
+      if (!status.allowed) {
+        const retryAfter = Math.ceil((status.resetTime - Date.now()) / 1000);
+        return NextResponse.json(
+          { error: "Location updates rate limited. Try again later." },
+          { status: 429, headers: { "Retry-After": retryAfter.toString() } }
+        );
       }
     } catch (e) {
-      console.warn("Location rate limiter unavailable:", e);
+      console.warn("[Location Update] Rate limiter unavailable:", e);
     }
 
-    const { error } = await supabase.from("locations").insert([
+    const { error } = await supabase.from("bus-locations").insert([
       {
         user_id: userId,
         lat: latitude,
@@ -48,40 +55,42 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (error) {
-      console.error("Supabase insert location error:", error);
+      console.error("[Location Update] Supabase insert error:", error);
       return NextResponse.json({ error: "Failed to store location" }, { status: 500 });
     }
 
     return NextResponse.json({ message: "Location updated", stored: true });
   } catch (error) {
-    console.error("Location update error:", error);
+    console.error("[Location Update] Error:", error);
     return NextResponse.json({ error: "Failed to update location" }, { status: 500 });
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    // [Location Get] Verify signed session cookie
+    const cookie = req.cookies.get("cavendish_session")?.value;
+    const session = await verifySession(cookie);
 
-    if (!session?.user) {
+    if (!session?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch latest location per bus/user (simple approach: latest N entries)
+    // Fetch latest locations (simple approach: latest N entries)
     const { data, error } = await supabase
-      .from("locations")
+      .from("bus-locations")
       .select("id, user_id, lat, lng, speed, heading, bus_id, created_at")
       .order("created_at", { ascending: false })
       .limit(100);
 
     if (error) {
-      console.error("Supabase fetch locations error:", error);
+      console.error("[Location Get] Supabase fetch error:", error);
       return NextResponse.json({ error: "Failed to fetch locations" }, { status: 500 });
     }
 
     return NextResponse.json({ locations: data || [], count: (data || []).length });
   } catch (error) {
-    console.error("Get locations error:", error);
+    console.error("[Location Get] Error:", error);
     return NextResponse.json({ error: "Failed to get locations" }, { status: 500 });
   }
 }

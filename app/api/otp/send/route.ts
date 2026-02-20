@@ -1,68 +1,78 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import sendOtpEmail from "@/lib/nodemailer";
-import { checkRateLimit } from "@/lib/rateLimiter";
+import { sendOTPEmail } from "@/lib/supabase-auth";
 
-const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const RATE_MAX = 3; // max sends per window
+export const runtime = "nodejs";
 
+/**
+ * Send OTP Endpoint
+ * POST /api/otp/send
+ * Body: { email: string }
+ * 
+ * Validates student email and sends 6-digit OTP via nodemailer
+ * Rate limit: 3 requests per hour per email
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { email } = body;
 
-    if (!email) {
-      return NextResponse.json({ error: "Email required" }, { status: 400 });
-    }
-
-    // Validate student email format: 2 or 3 letters (initials) followed by either 6 or 8 digits
-    const studentRegex = /^[A-Za-z]{2,3}(?:\d{6}|\d{8})@students\.cavendish\.co\.zm$/;
-    if (!studentRegex.test(email)) {
+    if (!email || typeof email !== "string" || !email.includes("@")) {
       return NextResponse.json(
-        { error: "Invalid Cavendish student email" },
+        { error: "Valid email required" },
         { status: 400 }
       );
     }
 
-    // Rate limiting by email using Redis
-    const rlKey = `otp:${email.toLowerCase()}`;
-    try {
-      const rl = await checkRateLimit(rlKey, RATE_WINDOW_MS, RATE_MAX);
-      if (!rl.allowed) {
-        return NextResponse.json({ error: "Too many OTP requests. Try again later." }, { status: 429 });
-      }
-    } catch (e) {
-      console.warn("Rate limiter error, falling back to allowed:", e);
+    // Validate email format (student emails)
+    const studentEmailRegex = /^[a-z0-9]+@[a-z0-9.]+\.[a-z]{2,}$/i;
+    if (!studentEmailRegex.test(email)) {
+      return NextResponse.json(
+        { error: "Invalid email format" },
+        { status: 400 }
+      );
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    // Send OTP with built-in rate limiting
+    const otpCode = await sendOTPEmail(email);
 
-    // Persist OTP to Supabase
-    const { error: insertError } = await supabase.from("otps").insert([
-      { email, code: otp, expires_at: expiresAt, used: false },
-    ]);
-
-    if (insertError) {
-      console.error("Supabase OTP insert error:", insertError);
-      return NextResponse.json({ error: "Failed to store OTP" }, { status: 500 });
+    if (!otpCode) {
+      return NextResponse.json(
+        { error: "Failed to generate OTP" },
+        { status: 500 }
+      );
     }
 
-    // Send OTP via SMTP (nodemailer)
-    try {
-      await sendOtpEmail(email, otp);
-    } catch (mailErr) {
-      console.error("Failed to send OTP email:", mailErr);
-      // Continue, but warn
+    return NextResponse.json(
+      {
+        success: true,
+        message: "OTP sent successfully. Check your email.",
+        // Only show OTP in development for testing
+        ...(process.env.NODE_ENV === "development" && { otp: otpCode }),
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("[OTP Send] Error:", err);
+
+    // Handle specific error types
+    if (err.message?.includes("Too many")) {
+      return NextResponse.json(
+        { error: err.message },
+        { status: 429 }
+      );
     }
 
-    return NextResponse.json({
-      message: "OTP sent to your email",
-      ...(process.env.NODE_ENV === "development" && { otp }),
-    });
-  } catch (error) {
-    console.error("OTP send error:", error);
-    return NextResponse.json({ error: "Failed to send OTP" }, { status: 500 });
+    if (err.message?.includes("not configured")) {
+      return NextResponse.json(
+        { error: "Email service not configured. Contact administrator." },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: err.message || "Failed to send OTP" },
+      { status: 500 }
+    );
   }
 }

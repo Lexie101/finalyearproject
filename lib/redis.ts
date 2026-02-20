@@ -1,15 +1,5 @@
-import Redis from "ioredis";
+// Redis support removed - app works without it
+// Rate limiting is still functional with in-memory tracking
 
-const redisUrl = process.env.REDIS_URL;
-
-let redis: Redis | null = null;
-
-if (redisUrl) {
-  redis = new Redis(redisUrl);
-} else {
-  console.warn("REDIS_URL is not set. Rate limiting and caching will be disabled.");
-}
-
-export { redis };
-
-export default redis;
+export const redis = null;
+export default null;

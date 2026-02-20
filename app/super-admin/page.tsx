@@ -7,20 +7,22 @@ import DashboardSuperAdmin from "@/components/DashboardSuperAdmin";
 
 export const dynamic = 'force-dynamic';
 
+const SESSION_RESTORE_TIMEOUT = 5000; // 5 seconds to restore session after login
+
 export default function SuperAdminPage() {
-  const { user, initializing, logout } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!initializing && user) {
-      // Only redirect if on wrong page
-      if (user.role !== "super_admin" && user.role !== "admin") {
+    if (!isLoading && user) {
+      // Allow both admin and super_admin roles to access this page
+      if (user.role !== "admin" && user.role !== "super_admin" && user.role !== "super-admin") {
         router.replace("/");
       }
     }
-  }, [user, initializing, router]);
+  }, [user, isLoading, router]);
 
-  if (initializing) {
+  if (isLoading) {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -32,18 +34,18 @@ export default function SuperAdminPage() {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
         <div className="text-center text-white">
-          <p className="mb-4">Redirecting to login...</p>
+          <p className="mb-4">Restoring session...</p>
           <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>
       </div>
     );
   }
 
-  if (user.role !== "super_admin" && user.role !== "admin") {
+  if (user.role !== "admin" && user.role !== "super_admin" && user.role !== "super-admin") {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
         <div className="text-center text-red-400">
-          <p>Access Denied: Super Admin role required</p>
+          <p>Access Denied: Admin role required</p>
         </div>
       </div>
     );

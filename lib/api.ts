@@ -2,6 +2,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "/api";
 
 async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE}${endpoint}`, {
+    // Ensure cookies (session) are included and accepted by the browser
+    credentials: 'include',
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -12,8 +14,12 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
   if (!response.ok) {
     try {
       const error = await response.json();
-      throw new Error(error.error || "API Request failed");
+      console.error(`[API Error] ${endpoint}: ${error.error || error.message}`, error);
+      throw new Error(error.error || error.message || "API Request failed");
     } catch (e) {
+      if (e instanceof Error && e.message.startsWith("[API Error]")) {
+        throw e;
+      }
       throw new Error(`API Request failed: ${response.statusText}`);
     }
   }
@@ -34,26 +40,26 @@ export const api = {
       body: JSON.stringify({ email, otp }),
     }),
 
-  adminLogin: (email: string, password: string, role: "admin" | "driver" | "super_admin") =>
-    apiRequest("/auth/admin-login", {
+  driverLogin: (email: string, password: string) =>
+    apiRequest("/auth/driver-login", {
       method: "POST",
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ email, password }),
     }),
 
-  // Super admin management functions
-  createAdmin: (email: string, password: string, role: "admin" | "driver", name: string, phone?: string) =>
+  // Super admin management functions (using admin-login endpoint)
+  createDriver: (email: string, password: string, name: string, phone?: string) =>
     apiRequest("/admin/manage", {
       method: "POST",
-      body: JSON.stringify({ action: "create", email, password, role, name, phone }),
+      body: JSON.stringify({ action: "create", email, password, role: "driver", name, phone }),
     }),
 
-  listAdmins: () =>
+  listDrivers: () =>
     apiRequest("/admin/manage", {
       method: "POST",
       body: JSON.stringify({ action: "list" }),
     }),
 
-  deleteAdmin: (email: string) =>
+  deleteDriver: (email: string) =>
     apiRequest("/admin/manage", {
       method: "POST",
       body: JSON.stringify({ action: "delete", email }),

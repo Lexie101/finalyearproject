@@ -1,94 +1,221 @@
-import { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { JWT as NextAuthJWT } from "next-auth/jwt";
+/**
+ * Session Management Module
+ * Handles JWT-style session signing and verification using HMAC
+ * Uses Web Crypto API for Edge Runtime compatibility
+ * 
+ * Session Format: base64.hmac_signature
+ * Payload: { email, role, iat (timestamp) }
+ */
 
-type UserRole = "student" | "driver" | "admin" | "super_admin";
+// Get session secret from environment, require it in production
+const COOKIE_SECRET = process.env.COOKIE_SECRET;
 
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      role: UserRole;
-    };
+if (!COOKIE_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "COOKIE_SECRET environment variable is required in production"
+    );
   }
+  console.warn(
+    "[Auth] COOKIE_SECRET not set, using insecure default for development only"
+  );
+}
 
-  interface JWT {
-    id: string;
-    email: string;
-    role: UserRole;
-  }
+const SECRET_KEY = COOKIE_SECRET || "dev_insecure_secret_change_in_production";
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-  interface User {
-    id: string;
-    email: string;
-    role: UserRole;
+/**
+ * Convert string to ArrayBuffer
+ */
+function stringToArrayBuffer(str: string): ArrayBuffer {
+  const encoder = new TextEncoder();
+  return encoder.encode(str).buffer;
+}
+
+/**
+ * Convert ArrayBuffer to hex string
+ */
+function arrayBufferToHex(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Generate HMAC signature using Web Crypto API
+ * @param message - The message to sign
+ * @returns Hex-encoded HMAC signature
+ */
+async function generateHmac(message: string): Promise<string> {
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      stringToArrayBuffer(SECRET_KEY),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const signature = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      stringToArrayBuffer(message)
+    );
+
+    return arrayBufferToHex(signature);
+  } catch (error) {
+    console.error("[Auth] HMAC generation failed:", error);
+    throw new Error("Failed to generate HMAC");
   }
 }
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        role: { label: "Role", type: "text" },
-        otp: { label: "OTP", type: "text" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.role || !credentials?.otp) {
-          throw new Error("Missing credentials");
-        }
+/**
+ * Verify HMAC signature using Web Crypto API
+ * @param message - The message that was signed
+ * @param signature - The hex-encoded signature
+ * @returns True if signature is valid
+ */
+async function verifyHmac(message: string, signature: string): Promise<boolean> {
+  try {
+    const expected = await generateHmac(message);
+    
+    // Timing-safe comparison using constant-time algorithm
+    const expectedBytes = new TextEncoder().encode(expected);
+    const providedBytes = new TextEncoder().encode(signature);
+    
+    if (expectedBytes.length !== providedBytes.length) {
+      return false;
+    }
+    
+    let diff = 0;
+    for (let i = 0; i < expectedBytes.length; i++) {
+      diff |= expectedBytes[i] ^ providedBytes[i];
+    }
+    
+    return diff === 0;
+  } catch (error) {
+    console.error("[Auth] HMAC verification failed:", error);
+    return false;
+  }
+}
 
-        // TODO: Verify OTP against database in production
-        // For development, use NEXT_PUBLIC_TEST_OTP environment variable
-        const storedOtp = process.env.NEXT_PUBLIC_TEST_OTP || "123456";
-        if (credentials.otp !== storedOtp) {
-          throw new Error("Invalid OTP");
-        }
+/**
+ * Session payload structure
+ */
+export interface SessionPayload {
+  email: string;
+  role: string;
+  userId?: string | number;
+  iat?: number; // issued-at timestamp
+}
 
-        // Validate student email format
-        if (credentials.role === "student") {
-          const studentRegex =
-            /^[A-Za-z]{2,3}\d{6,8}@students\.cavendish\.co\.zm$/;
-          if (!studentRegex.test(credentials.email)) {
-            throw new Error("Invalid student email format");
-          }
-        }
+/**
+ * Session payload with required userId (for internal use)
+ */
+export interface SessionPayloadWithUserId extends SessionPayload {
+  userId: string | number;
+}
 
-        return {
-          id: credentials.email,
-          email: credentials.email,
-          role: credentials.role as UserRole,
-        };
-      },
-    }),
-  ],
-  pages: {
-    signIn: "/",
-    error: "/",
-  },
-  callbacks: {
-    async jwt({ token, user }: { token: NextAuthJWT; user?: any }) {
-      if (user) {
-        token.id = user.id;
-        token.email = user.email;
-        token.role = user.role;
+/**
+ * Sign a session payload into a secure token
+ * Creates HMAC signature to prevent tampering
+ * NOTE: This is now async due to Web Crypto API requirements
+ * 
+ * @param payload - The session data to sign
+ * @returns Signed token in format: "base64.signature"
+ * @throws Error if signing fails
+ */
+export async function signSession(payload: SessionPayload): Promise<string> {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const body = {
+      ...payload,
+      iat: payload.iat || now,
+    };
+
+    // Encode payload as base64
+    const encoded = Buffer.from(JSON.stringify(body)).toString("base64");
+
+    // Create HMAC signature
+    const hmac = await generateHmac(encoded);
+
+    return `${encoded}.${hmac}`;
+  } catch (error) {
+    console.error("[Auth] Session signing failed:", error);
+    throw new Error("Failed to sign session");
+  }
+}
+
+/**
+ * Create a session token - alias for signSession
+ * @param payload - The session data to sign
+ * @returns Signed session token
+ */
+export async function createSession(payload: SessionPayload): Promise<string> {
+  return signSession(payload);
+}
+
+/**
+ * Verify a session token and extract payload
+ * Uses timing-safe comparison to prevent timing attacks
+ * NOTE: This is now async due to Web Crypto API requirements
+ * 
+ * @param cookieValue - The signed session token
+ * @returns Session payload if valid, null if invalid
+ */
+export async function verifySession(cookieValue?: string | null): Promise<SessionPayload | null> {
+  if (!cookieValue || typeof cookieValue !== "string") {
+    return null;
+  }
+
+  try {
+    // Split token into parts
+    const parts = cookieValue.split(".");
+    if (parts.length !== 2) {
+      console.warn("[Auth] Invalid session format");
+      return null;
+    }
+
+    const [encoded, signature] = parts;
+
+    // Verify signature
+    const isValid = await verifyHmac(encoded, signature);
+
+    if (!isValid) {
+      console.warn("[Auth] Invalid session signature");
+      return null;
+    }
+
+    // Decode and parse payload
+    const json = Buffer.from(encoded, "base64").toString("utf8");
+    const payload = JSON.parse(json) as SessionPayload;
+
+    // Optionally validate age (7 days max)
+    if (payload.iat) {
+      const age = Math.floor(Date.now() / 1000) - payload.iat;
+      if (age > SESSION_MAX_AGE) {
+        console.warn("[Auth] Session expired");
+        return null;
       }
-      return token;
-    },
-    async session({ session, token }: { session: any; token: NextAuthJWT }) {
-      if (session.user) {
-        session.user.id = token.id;
-        session.user.email = token.email;
-        session.user.role = token.role;
-      }
-      return session;
-    },
-  },
-  session: {
-    strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 24 hours
-  },
-  secret: process.env.NEXTAUTH_SECRET || "your-secret-key",
-};
+    }
+
+    return payload;
+  } catch (error) {
+    console.warn("[Auth] Session verification failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Check if session is about to expire (within 1 day)
+ */
+export function isSessionExpiringSoon(payload: SessionPayload): boolean {
+  if (!payload.iat) return false;
+
+  const age = Math.floor(Date.now() / 1000) - payload.iat;
+  const remaining = SESSION_MAX_AGE - age;
+  const oneDay = 60 * 60 * 24;
+
+  return remaining < oneDay;
+}

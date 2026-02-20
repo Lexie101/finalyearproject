@@ -3,17 +3,17 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AuthPanel } from "@/components/AuthPanel";
-import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/components/AuthProvider";
 
 function LoginInner() {
-  const { login, initializing } = useAuth();
+  const { login, isLoading } = useAuth();
 
-  const handleLogin = (role: "student" | "driver" | "admin" | "super_admin", email: string) => {
+  const handleLogin = (role: "student" | "driver" | "super_admin", email: string) => {
     if (role === null) return;
     login(role, email);
   };
 
-  if (initializing) {
+  if (isLoading) {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -54,9 +54,5 @@ function LoginInner() {
 }
 
 export default function LoginPage() {
-  return (
-    <AuthProvider>
-      <LoginInner />
-    </AuthProvider>
-  );
+  return <LoginInner />;
 }

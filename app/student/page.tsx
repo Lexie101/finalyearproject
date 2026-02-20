@@ -7,20 +7,22 @@ import DashboardStudent from "@/components/DashboardStudent";
 
 export const dynamic = 'force-dynamic';
 
+const SESSION_RESTORE_TIMEOUT = 5000; // 5 seconds to restore session after login
+
 export default function StudentPage() {
-  const { user, initializing, logout } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!initializing && user) {
+    if (!isLoading && user) {
       // Only redirect if on wrong page
       if (user.role !== "student") {
         router.replace("/");
       }
     }
-  }, [user?.role, initializing, router]);
+  }, [user?.role, isLoading, router]);
 
-  if (initializing) {
+  if (isLoading) {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -28,11 +30,13 @@ export default function StudentPage() {
     );
   }
 
+  // Allow longer timeout for session restoration after login
+  // Customer may have just logged in, give AuthProvider time to fetch session from server
   if (!user) {
     return (
       <div className="h-screen w-screen bg-[#0f0c29] flex items-center justify-center">
         <div className="text-center text-white">
-          <p className="mb-4">Redirecting to login...</p>
+          <p className="mb-4">Restoring session...</p>
           <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>
       </div>
